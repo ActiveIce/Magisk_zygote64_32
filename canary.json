@@ -1,0 +1,12 @@
+{
+  "magisk": {
+    "version": "21ed0956",
+    "versionCode": "27002",
+    "link": "https://raw.githubusercontent.com/ActiveIce/Magisk_zygote64_32/master/app-release.apk",
+    "note": "https://cdn.jsdelivr.net/gh/topjohnwu/magisk-files@3180e66585494131b76b498531c2d3a56e56e69b/notes.md"
+  },
+  "stub": {
+    "versionCode": "39",
+    "link": "https://raw.githubusercontent.com/ActiveIce/Magisk_zygote64_32/master/stub-release.apk"
+  }
+}
