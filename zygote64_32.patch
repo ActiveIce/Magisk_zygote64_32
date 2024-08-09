@@ -1,0 +1,81 @@
+From eaaef138d96ceb713ab3de9ba4f5d3122e39dcc2 Mon Sep 17 00:00:00 2001
+From: GitHub Actions <actions@github.com>
+Date: Fri, 1 Mar 2024 16:48:19 +0800
+Subject: [PATCH] zygote64_32
+
+---
+ native/src/init/rootdir.cpp | 48 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+
+diff --git a/native/src/init/rootdir.cpp b/native/src/init/rootdir.cpp
+index 6182da6a6..e4862d0d0 100644
+--- a/native/src/init/rootdir.cpp
++++ b/native/src/init/rootdir.cpp
+@@ -13,9 +13,52 @@ using namespace std;
+ 
+ static vector<string> rc_list;
+ 
++#define VENDOR_DIR      "/vendor"
++#define BUILD_PROP      "build.prop"
+ #define NEW_INITRC_DIR  "/system/etc/init/hw"
+ #define INIT_RC         "init.rc"
+ 
++static void patch_vendor(const char *src_path) {
++    auto src_dir = xopen_dir(src_path);
++    if (!src_dir) return;
++    int src_fd = dirfd(src_dir.get());
++
++    auto dest_dir = [&] {
++        char buf[PATH_MAX] = {};
++        ssprintf(buf, sizeof(buf), ROOTOVL "%s", src_path);
++        xmkdirs(buf, 0755);
++        return xopen_dir(buf);
++    }();
++    if (!dest_dir) return;
++    int dest_fd = dirfd(dest_dir.get());
++
++    {
++        auto src = xopen_file(xopenat(src_fd, BUILD_PROP, O_RDONLY | O_CLOEXEC, 0), "re");
++        if (!src) return;
++        auto dest = xopen_file(
++                xopenat(dest_fd, BUILD_PROP, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0), "we");
++        if (!dest) return;
++        LOGD("Patching " BUILD_PROP " in %s\n", src_path);
++        file_readline(false, src.get(), [&dest](string_view line) -> bool {
++            if (line.starts_with("ro.zygote=zygote64")) {
++                fprintf(dest.get(), "ro.zygote=zygote64_32\n");
++                return true;
++            }
++            if (line.starts_with("ro.vendor.product.cpu.abilist=arm64-v8a")) {
++                fprintf(dest.get(), "ro.vendor.product.cpu.abilist=arm64-v8a,armeabi-v7a,armeabi\n");
++                return true;
++            }
++            if (line.starts_with("ro.vendor.product.cpu.abilist32=")) {
++                fprintf(dest.get(), "ro.vendor.product.cpu.abilist32=armeabi-v7a,armeabi\n");
++                return true;
++            }
++            fprintf(dest.get(), "%s", line.data());
++            return true;
++        });
++        fclone_attr(fileno(src.get()), fileno(dest.get()));
++    }
++}
++
+ static void patch_rc_scripts(const char *src_path, const char *tmp_path, bool writable) {
+     auto src_dir = xopen_dir(src_path);
+     if (!src_dir) return;
+@@ -271,6 +314,11 @@ void MagiskInit::patch_ro_root() {
+         mv_path(ROOTOVL "/sbin", ".");
+     }
+ 
++    // Patch vendor
++    if (access(VENDOR_DIR "/" BUILD_PROP, F_OK) == 0) {
++        patch_vendor(VENDOR_DIR);
++    }
++
+     // Patch init.rc
+     if (access(NEW_INITRC_DIR "/" INIT_RC, F_OK) == 0) {
+         // Android 11's new init.rc
+-- 
+2.40.1
+
