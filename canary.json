@@ -1,0 +1,8 @@
+{
+  "magisk": {
+    "version": "e73ff679",
+    "versionCode": "28101",
+    "link": "https://raw.githubusercontent.com/ActiveIce/Magisk_zygote64_32/master/app-release.apk",
+    "note": "https://github.com/topjohnwu/Magisk/releases/download/canary-28101/notes.md"
+  }
+}
