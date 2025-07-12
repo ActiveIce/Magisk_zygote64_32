@@ -1,0 +1,8 @@
+{
+  "magisk": {
+    "version": "e472db55",
+    "versionCode": "30100",
+    "link": "https://github.com/topjohnwu/Magisk/releases/download/v30.1/Magisk-v30.1.apk",
+    "note": "https://github.com/topjohnwu/Magisk/releases/download/v30.1/notes.md"
+  }
+}
