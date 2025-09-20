@@ -1,0 +1,85 @@
+From 8b05a547249114663e6b2b45a59fed4e731d674e Mon Sep 17 00:00:00 2001
+From: GitHub Actions <actions@github.com>
+Date: Mon, 26 Aug 2024 12:40:47 +0800
+Subject: [PATCH] zygote64_32
+
+---
+ native/src/init/rootdir.cpp | 48 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+
+diff --git a/native/src/init/rootdir.cpp b/native/src/init/rootdir.cpp
+index 2f7ff0b30..2c745d7f4 100644
+--- a/native/src/init/rootdir.cpp
++++ b/native/src/init/rootdir.cpp
+@@ -14,6 +14,8 @@ static vector<string> rc_list;
+ 
+ #define NEW_INITRC_DIR  "/system/etc/init/hw"
+ #define INIT_RC         "init.rc"
++#define VENDOR_DIR      "/vendor"
++#define BUILD_PROP      "build.prop"
+ 
+ static bool unxz(int fd, rust::Slice<const uint8_t> bytes) {
+     uint8_t out[8192];
+@@ -174,6 +176,47 @@ static bool patch_rc_scripts(const char *src_path, const char *tmp_path, bool wr
+     }
+ }
+ 
++static bool patch_build_prop(const char *src_path) {
++    auto src_dir = xopen_dir(src_path);
++    if (!src_dir) return false;
++    int src_fd = dirfd(src_dir.get());
++
++    auto dest_dir = [&] {
++        char buf[PATH_MAX] = {};
++        ssprintf(buf, sizeof(buf), ROOTOVL "%s", src_path);
++        xmkdirs(buf, 0755);
++        return xopen_dir(buf);
++    }();
++    if (!dest_dir) return false;
++    int dest_fd = dirfd(dest_dir.get());
++
++    {
++        owned_fd src_rc = xopenat(src_fd, INIT_RC, O_RDONLY | O_CLOEXEC, 0);
++        if (src_rc < 0) return false;
++        auto dest_rc = xopen_file(
++                xopenat(dest_fd, INIT_RC, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0), "we");
++        if (!dest_rc) return false;
++        LOGD("Patching " BUILD_PROP " in %s\n", src_path);
++        file_readline(src_rc, [&dest_rc](Utf8CStr line) -> bool {
++            if (line.sv().starts_with("ro.zygote=zygote64")) {
++                fprintf(dest_rc.get(), "ro.zygote=zygote64_32\n");
++                return true;
++            }
++            if (line.sv().starts_with("ro.vendor.product.cpu.abilist=arm64-v8a")) {
++                fprintf(dest_rc.get(), "ro.vendor.product.cpu.abilist=arm64-v8a,armeabi-v7a,armeabi\n");
++                return true;
++            }
++            if (line.sv().starts_with("ro.vendor.product.cpu.abilist32=")) {
++                fprintf(dest_rc.get(), "ro.vendor.product.cpu.abilist32=armeabi-v7a,armeabi\n");
++                return true;
++            }
++            fprintf(dest_rc.get(), "%s", line.c_str());
++            return true;
++        });
++        fclone_attr(src_rc, fileno(dest_rc.get()));
++    }
++}
++
+ static void load_overlay_rc(const char *overlay) {
+     auto dir = open_dir(overlay);
+     if (!dir) return;
+@@ -322,6 +365,11 @@ void MagiskInit::patch_ro_root() noexcept {
+     }
+     if (p) patch_fissiond(tmp_dir.data());
+ 
++    // Patch build.prop
++    if (access(VENDOR_DIR "/" BUILD_PROP, F_OK) == 0) {
++        patch_build_prop(VENDOR_DIR);
++    }
++
+     // Extract overlay archives
+     extract_files(false);
+ 
+-- 
+2.43.0
+
